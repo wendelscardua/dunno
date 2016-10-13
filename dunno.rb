@@ -13,8 +13,8 @@ end
 class MainWindow < Gosu::Window
   WIDTH = 1000
   HEIGHT = 720
-  FLEET_SIZE = 32
-  ITERATIONS = 1000
+  FLEET_SIZE = 24
+  ITERATIONS = 2_000
 
   attr_reader :fleet, :stars
 
@@ -47,7 +47,7 @@ class MainWindow < Gosu::Window
 
   def brain
     # input, output, hidden layers, neurons per layer
-    NeuralNetwork.new 3, 4, 2, 5
+    NeuralNetwork.new 5, 3, 3, 8
   end
 
   def update
@@ -60,35 +60,42 @@ class MainWindow < Gosu::Window
     if Gosu.button_down?(Gosu::KbUp) || Gosu.button_down?(Gosu::GpButton0)
       @player.accelerate
     end
+    speed_buffer = 1
+    if Gosu.button_down?(Gosu::KbTab)
+      speed_buffer = 200_000
+    end
     @player.move
 
-    @fleet.each do |ship|
-      ship.think(environment: self)
-    end
-    @fleet.each(&:move)
-
-    ([@player] + @fleet).each { |ship| ship.collect_stars(@stars) }
-
-    @stars.push(Star.new(@star_anim)) if rand < 0.08 && @stars.size < 25
-
-    @iterations += 1
-    if @iterations >= ITERATIONS
-      @iterations = 0
-      puts 'G.A. iteration!'
-      puts "Generation #{@generations}"
-      @generations += 1
-      puts @fleet.map(&:score).inspect
-      @ga.chromosomes.each_with_index do |chromosome, index|
-        weights = @fleet[index].brain.weights
-        chromosome.genome.each do |key, _value|
-          chromosome.genome[key] = weights.shift
-        end
-        chromosome.fitness = @fleet[index].score
-        @fleet[index].score = 0
+    speed_buffer.times do 
+      @fleet.each do |ship|
+        ship.think(environment: self)
       end
-      @ga.step_over
-      @ga.chromosomes.each_with_index do |chromosome, index|
-        @fleet[index].brain.weights = chromosome.genome.values
+      @fleet.each(&:move)
+
+      ([@player] + @fleet).each { |ship| ship.collect_stars(@stars) }
+
+      @stars.push(Star.new(@star_anim)) if rand < 0.08 && @stars.size < 40
+
+      @iterations += 1
+      if @iterations >= ITERATIONS
+        @iterations = 0
+        puts 'G.A. iteration!'
+        puts "Generation #{@generations}"
+        @generations += 1
+        puts @fleet.map(&:score).inspect
+        @ga.chromosomes.each_with_index do |chromosome, index|
+          weights = @fleet[index].brain.weights
+          chromosome.genome.each do |key, _value|
+            chromosome.genome[key] = weights.shift
+          end
+          chromosome.fitness = @fleet[index].score
+          @fleet[index].score = 0
+        end
+        @ga.step_over
+        @ga.chromosomes.each_with_index do |chromosome, index|
+          @fleet[index].brain.weights = chromosome.genome.values
+        end
+        @fleet.each(&:reset)
       end
     end
   end
@@ -103,18 +110,48 @@ class MainWindow < Gosu::Window
   def button_down(id)
     close if id == Gosu::KbEscape
   end
+
+  def nearest_star(ship)
+    best_star = stars.first
+    best_distance = Float::INFINITY
+    fov = 30.0 * Math::PI / 180.0
+    stars.each do |star|
+      dx = star.x - ship.x
+      dy = star.y - ship.y
+      star_angle = Math.atan2(-dy, dx)
+      delta = (star_angle - ship.angle).abs
+      delta = 2 * Math::PI - delta if delta > Math::PI
+      if delta <= fov
+        distance = dx * dx + dy * dy
+        if distance < best_distance
+          best_star = star
+          best_distance = distance
+        end
+      end
+    end
+    best_star
+  end
 end
 
 # Ship
 class Ship
-  attr_reader :brain, :score
+  attr_reader :brain, :score, :color, :angle, :x, :y
   attr_writer :brain, :score
 
   def initialize(brain = nil)
     @image = Gosu::Image.new('media/starfighter.bmp')
-    @x = @y = @vel_x = @vel_y = @angle = 0.0
-    @score = 0
+    @x = @y = 0.0
     @brain = brain
+    reset
+  end
+
+  def reset
+    @vel_x = @vel_y = @angle = 0.0
+    @score = 0.0
+    @color = Gosu::Color.new(0xff_000000)
+    @color.red = rand(256 - 40) + 40
+    @color.green = rand(256 - 40) + 40
+    @color.blue = rand(256 - 40) + 40
   end
 
   def warp(x, y)
@@ -124,10 +161,12 @@ class Ship
 
   def turn_left
     @angle -= 4.5
+    @angle += 360.0 while @angle < 0
   end
 
   def turn_right
     @angle += 4.5
+    @angle -= 360.0 while @angle > 360.0
   end
 
   def accelerate
@@ -146,47 +185,58 @@ class Ship
   end
 
   def draw
-    @image.draw_rot(@x, @y, ZOrder::PLAYER, @angle)
+    @image.draw_rot(@x, @y, ZOrder::PLAYER, @angle, 0.5, 0.5, 1, 1, @color, :add)
   end
 
   def think(environment: nil)
-    return if environment.nil?
-    near_star = environment.stars.first
-    return if near_star.nil?
-    distance = Float::INFINITY
-    environment.stars.each do |star|
-      sd = (star.x - @x)**2 + (star.y - @y)**2
-      if sd < distance
-        near_star = star
-        distance = sd
-      end
-    end
+    return if environment.nil? || environment.stars.count == 0
+    near_star = environment.nearest_star(self)
+
+    rad_angle = @angle / 180.0 * Math::PI
     input = [
-      @angle,
-      (@x - near_star.x) / MainWindow::WIDTH,
-      (@y - near_star.y) / MainWindow::HEIGHT
+      Math.cos(rad_angle),
+      -Math.sin(rad_angle),
+      (near_star.x - @x) / MainWindow::WIDTH,
+      (near_star.y - @y) / MainWindow::HEIGHT,
+      compare_hue(@color.hue, near_star.color.hue) / 180.0 * Math::PI
     ]
     output = brain.apply(input)
-    puts "Brain #{self} Input [#{input}] Output [#{output}]"
-    if output[2] > output[3]
+    if output[2] > 0.5
       accelerate
-    elsif output[0] > output[1]
-      turn_left
-    else
-      turn_right
+    end
+    if output[0] > 0.5 || output[1] > 0.5 
+      if output[0] > output[1]
+        turn_left
+      else
+        turn_right
+      end
     end
   end
 
+  def compare_hue(x, y)
+    delta = (x - y).abs
+    delta = 360.0 - delta if delta > 180.0
+    delta
+  end
+
   def collect_stars(stars)
-    if stars.reject! { |star| Gosu.distance(@x, @y, star.x, star.y) < 20 }
-      @score += 1
+    stars.reject! do |star|
+      if Gosu.distance(@x, @y, star.x, star.y) < 20
+        delta_hue = compare_hue(star.color.hue, color.hue)
+        if delta_hue < 90.0
+          @score += 10.0
+        elsif delta_hue > 90.0
+          @score -= 5.0
+        end
+        true
+      end
     end
   end
 end
 
 # Star
 class Star
-  attr_reader :x, :y
+  attr_reader :x, :y, :color
 
   def initialize(animation)
     @animation = animation

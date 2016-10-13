@@ -76,7 +76,7 @@ class NeuralNetwork
     @output = nil
     @layers.each do |layer|
       @output = layer.neurons.map do |neuron|
-        net_input = (0...input.count).reduce do |a, e|
+        net_input = (0...input.count).reduce(0.0) do |a, e|
           a + input[e] * neuron.weights[e]
         end
         net_input += neuron.weights.last * D_BIAS
