@@ -34,11 +34,11 @@ class GeneticAlgorithm
         count += 1
         break if count > elite_chromosomes
       end
-      total_fit += (chromosome.fitness > 0.0 ? chromosome.fitness : 0.0)
+      total_fit += chromosome.normalized_fitness
     end
     slice = rand * total_fit
     chromosomes.each do |chromosome|
-      slice -= chromosome.fitness
+      slice -= chromosome.normalized_fitness
       return chromosome if slice <= 0.0
     end
     chromosomes.first
@@ -80,6 +80,14 @@ class Chromosome
           'G'
         end
       )
+    end
+  end
+
+  def normalized_fitness
+    if fitness <= 1.0
+      1.0
+    else
+      fitness
     end
   end
 
