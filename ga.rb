@@ -67,6 +67,22 @@ class Chromosome
     @fitness = 0.0
   end
 
+  def dna
+    @genome.values.reduce('') do |a, e|
+      a + (
+        if e < -0.5
+          'C'
+        elsif e < 0.0
+          'T'
+        elsif e < 0.5
+          'A'
+        else
+          'G'
+        end
+      )
+    end
+  end
+
   def mutate(mutation_chance)
     Chromosome.new Hash[
                      @genome.map do |gene, value|
