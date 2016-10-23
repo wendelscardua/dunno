@@ -1,0 +1,38 @@
+AllCops:
+  TargetRubyVersion: 2.2
+  UseCache: true
+
+Metrics/LineLength:
+  Max: 120
+Style/AsciiComments:
+  Enabled: false
+Style/BlockDelimiters:
+  EnforcedStyle: braces_for_chaining
+Style/BracesAroundHashParameters:
+  EnforcedStyle: context_dependent
+
+# Disabled cops
+Documentation:
+  Enabled: false
+Metrics/AbcSize:
+  Enabled: false
+Metrics/ClassLength:
+  Enabled: false
+Metrics/CyclomaticComplexity:
+  Enabled: false
+Metrics/MethodLength:
+  Enabled: false
+Metrics/ModuleLength:
+  Enabled: false
+Metrics/PerceivedComplexity:
+  Enabled: false
+Style/ClassAndModuleChildren:
+  Enabled: false
+Style/GuardClause:
+  Enabled: false
+Style/Lambda:
+  Enabled: false
+Style/NumericLiterals:
+  Enabled: false
+Style/SingleLineBlockParams:
+  Enabled: false
